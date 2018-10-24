@@ -33,7 +33,12 @@ class B(Chessman):
 
 class N(Chessman):
 	def ismoveallowed(self, fromY, fromX, san):
-		return True
+		dy = abs(san.getY()-fromY)
+		dx = abs(san.getX()-fromX)
+		if (dy == 2 and dx == 1) or (dy == 1 and dx == 2):
+			if san.target() == ' ' or self.isopponent(sa.target()):
+				return True
+		return False
 
 class P(Chessman):
 	def ismoveallowed(self, fromY, fromX, san):
