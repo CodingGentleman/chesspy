@@ -151,15 +151,29 @@ class Board(object):
         chessman.inc_move_count()
 
     def pop(self, colour, mv):
+        possible_chessmen = []
         for idxR, rank in enumerate(self.board):
             for idxF, field in enumerate(rank):
                 mv.source = Position(idxF, idxR)
                 if isinstance(field, mv.piece_type) and field.colour == colour and field.is_move_allowed(mv):
-                    self.__clear(idxF, idxR)
-                    if mv.special == Move.en_passante:
-                        self.__clear(mv.target.x, idxR)
-                    return field
-        raise ValueError('Invalid move')
+                    possible_chessmen.append((mv.source, field))
+        selection = self.__reduce_selection(mv, possible_chessmen)
+        if selection is None:
+            raise ValueError('Invalid move')
+        mv.source = selection[0]
+        chessman = selection[1]
+        self.__clear(mv.source.x, mv.source.y)
+        if mv.special == Move.en_passante:
+            self.__clear(mv.target.x, mv.source.y)
+        return chessman
+
+    def __reduce_selection(self, mv, possible_chessmen):
+        if len(possible_chessmen) == 1:
+            return possible_chessmen[0]
+        for chesstuple in possible_chessmen:
+            if mv.is_san_identicated_position(chesstuple[0]):
+                return chesstuple
+        return None
 
     def __pop(self, x, y):
         field = self.get(x, y)
@@ -298,6 +312,15 @@ class Move(object):
         elif self.special is not None and self.special.startswith(self.castling_prefix):
             clazz = 'K'   
         return globals()[clazz]
+
+    def is_san_identicated_position(self, position):
+        identicator = self.san[1:-2]
+        if identicator == '':
+            return False
+        file = Move.file_to_idx.get(identicator)
+        if file is not None:
+            return position.x == file
+        return position.y == int(identifcator)
 
     @property
     def dy(self):
