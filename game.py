@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import re
+import sys
 
 WHITE = 'w'
 BLACK = 'b'
@@ -21,6 +22,10 @@ UNICODE_PIECES = {
 }
 
 class Chessman(object):
+    '''
+        Base class for all chess pieces.
+    '''
+
     def __init__(self, colour):
         self.colour = colour
         self._move_count = 0
@@ -59,22 +64,13 @@ class K(Chessman):
     def __is_cycling_allowed(self, mv):
         if self.move_count != 0 or mv.target.get.move_count != 0:
             return False
-        for x in mv.itx:
-            if board.get(x, mv.source.y) != FIELD:
-                return False
-        return True
+        return mv.is_x_path_clear()
 
 class R(Chessman):
     def _is_move_allowed(self, mv):
         if (mv.dy != 0) == (mv.dx != 0):
             return False
-        for x in mv.itx:
-            if board.get(x, mv.source.y) != FIELD:
-                return False
-        for y in mv.ity:
-            if board.get(mv.source.x, y) != FIELD:
-                return False
-        return True
+        return mv.is_x_path_clear() and mv.is_y_path_clear()
 
 class B(Chessman):
     def _is_move_allowed(self, mv):
@@ -115,7 +111,7 @@ class P(Chessman):
 
         # check straight move
         if mv.dx == 0 and mv.target.get == FIELD:
-            # check if free double jump
+            # check for double jump
             if mv.dy == 2:
                 hurdle = board.get(mv.target.x, mv.target.y-(1 if self.colour == WHITE else -1))
                 mv.special = Move.pawn_double
@@ -159,7 +155,7 @@ class Board(object):
             for idxF, field in enumerate(rank):
                 mv.source = Position(idxF, idxR)
                 if isinstance(field, mv.piece_type) and field.colour == colour and field.is_move_allowed(mv):
-                    self.__clear(idxF, idxF)
+                    self.__clear(idxF, idxR)
                     if mv.special == Move.en_passante:
                         self.__clear(mv.target.x, idxR)
                     return field
@@ -193,19 +189,17 @@ class Board(object):
         if mv.special == Move.white_resigned:
             self.win(BLACK)
         if mv.special.startswith(Move.castling_prefix):
-            # set king as source
-            rank = 0 if colour == BLACK else 7
             k = self.pop(colour, mv)
             if mv.special == Move.castling_kingside:
-                r = self.get(rank, 7)
+                r = self.get(7, mv.source.y)
+                self.board[mv.source.y][7] = FIELD
                 self.__set(mv.source.x + 2, mv.source.y, k)
                 self.__set(mv.target.x - 2, mv.target.y, r)
-                self.board[rank][mv.target.x] = FIELD
             else:
-                r = self.get(rank, 0)
+                r = self.get(0, mv.source.y)
+                self.board[mv.source.y][0] = FIELD
                 self.__set(mv.source.x - 2, mv.target.y, k)
                 self.__set(mv.target.x + 3, mv.target.y, r)
-                self.board[move.target.y][mv.target.x] = FIELD
 
     def __display_board(self):
         res = ['    a   b   c   d   e   f   g   h']
@@ -278,9 +272,23 @@ class Move(object):
         return self.san
 
     def __create_target(self, colour):
-        if self.special is not None and self.special.startswith(Move.castling_prefix):
-            return Position(0 if self.special == Move.castling_queenside else 7, 0 if colour == WHITE else 7)
+        if self.special is not None:
+            if self.special.startswith(Move.castling_prefix):
+                return Position(0 if self.special == Move.castling_queenside else 7, 0 if colour == WHITE else 7)
+            return None
         return Position(Move.file_to_idx[self.san[-2]], int(self.san[-1])-1)
+
+    def is_x_path_clear(self):
+        for x in self.itx:
+            if board.get(x, self.source.y) != FIELD:
+                return False
+        return True
+
+    def is_y_path_clear(self):
+        for y in self.ity:
+            if board.get(self.source.x, y) != FIELD:
+                return False
+        return True
 
     @property
     def piece_type(self):
@@ -364,8 +372,7 @@ def alternate_colour():
         yield BLACK
 
 # main flow
-use_unicode = False
-Board.start_state = 'Ra1 Ke1 Rh1 Ra8 Ke8 Rh8'
+use_unicode = len(sys.argv) > 1 and sys.argv[1] == '-u'
 board = Board()
 colour_alternator = alternate_colour()
 while board.winner is None:
